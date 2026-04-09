@@ -58,8 +58,10 @@ PAPER_MODE        = os.getenv("PAPER_MODE", "true").lower() == "true"
 PAPER_BALANCE     = float(os.getenv("PAPER_BALANCE", "5000"))
 BET_SIZE_USD      = float(os.getenv("BET_SIZE_USD", "12"))
 MAX_BET_USD       = float(os.getenv("MAX_BET_USD", "35"))
+KELLY_FRACTION    = float(os.getenv("KELLY_FRACTION", "1.0"))
 MIN_DIVERGENCE    = float(os.getenv("MIN_DIVERGENCE", "0.10"))  # sentiment vs price must diverge by 10+ pts
 MIN_SENTIMENT_CONF= float(os.getenv("MIN_SENTIMENT_CONF", "0.40"))
+MAKER_FEE         = float(os.getenv("MAKER_FEE", "0.0175"))
 POLL_INTERVAL_SEC = int(os.getenv("POLL_INTERVAL_SEC", "300"))
 LOOKBACK_HOURS    = int(os.getenv("LOOKBACK_HOURS", "12"))
 
@@ -302,7 +304,7 @@ def find_divergence_trade(markets: list, sentiment: TopicSentiment,
                 # Market underprices YES relative to sentiment → buy YES
                 side, price = "yes", yes_ask
                 edge = divergence * sentiment.confidence
-                if edge > best_divergence:
+                if edge - MAKER_FEE > 0 and edge > best_divergence:
                     best_divergence = edge
                     best = {"market": m, "side": side, "price": price,
                             "divergence": divergence, "edge": edge,
@@ -312,7 +314,7 @@ def find_divergence_trade(markets: list, sentiment: TopicSentiment,
                 # Market overprices YES → buy NO
                 side, price = "no", no_ask
                 edge = (-divergence) * sentiment.confidence
-                if edge > best_divergence:
+                if edge - MAKER_FEE > 0 and edge > best_divergence:
                     best_divergence = edge
                     best = {"market": m, "side": side, "price": price,
                             "divergence": -divergence, "edge": edge,
@@ -326,7 +328,7 @@ def find_divergence_trade(markets: list, sentiment: TopicSentiment,
             if divergence >= MIN_DIVERGENCE and sentiment.confidence >= MIN_SENTIMENT_CONF:
                 side, price = "yes", yes_ask
                 edge = divergence * sentiment.confidence
-                if edge > best_divergence:
+                if edge - MAKER_FEE > 0 and edge > best_divergence:
                     best_divergence = edge
                     best = {"market": m, "side": side, "price": price,
                             "divergence": divergence, "edge": edge,
@@ -335,7 +337,7 @@ def find_divergence_trade(markets: list, sentiment: TopicSentiment,
             elif -divergence >= MIN_DIVERGENCE and sentiment.confidence >= MIN_SENTIMENT_CONF:
                 side, price = "no", no_ask
                 edge = (-divergence) * sentiment.confidence
-                if edge > best_divergence:
+                if edge - MAKER_FEE > 0 and edge > best_divergence:
                     best_divergence = edge
                     best = {"market": m, "side": side, "price": price,
                             "divergence": -divergence, "edge": edge,
@@ -451,7 +453,12 @@ async def main():
                     continue
 
                 price     = trade["price"]
-                contracts = max(1, min(int(BET_SIZE_USD * 100 / price), int(MAX_BET_USD * 100 / price)))
+                # Kelly criterion sizing
+                market_prob = price / 100
+                model_prob = min(0.95, market_prob + trade["edge"])
+                kelly_f = max(0, (model_prob - market_prob) / (1 - market_prob)) if market_prob < 1 else 0
+                kelly_bet = max(1, min(ledger.balance * kelly_f * KELLY_FRACTION, MAX_BET_USD))
+                contracts = max(1, int(kelly_bet * 100 / price))
                 ticker    = trade["market"].get("ticker", "?")
 
                 log.info(f"[TRADE] {ticker} | {trade['side'].upper()} {contracts}ct @ {price}¢ | "
