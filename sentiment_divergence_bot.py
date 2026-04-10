@@ -95,7 +95,7 @@ def check_circuit_breaker() -> bool:
     if _consecutive_losses >= CONSECUTIVE_LOSS_PAUSE:
         return True
     # Use PAPER_BALANCE if available, else 5000
-    _balance = globals().get("PAPER_BALANCE", 5000)
+    _balance = globals().get("PAPER_BALANCE", 2000)
     if _daily_pnl < -DAILY_DRAWDOWN_PAUSE_PCT * _balance:
         return True
     return False
@@ -132,10 +132,10 @@ KALSHI_API_URL    = os.getenv("KALSHI_API_URL", f"{KALSHI_BASE}/trade-api/v2")
 KALSHI_API_KEY    = os.getenv("KALSHI_API_KEY", "")
 KALSHI_KEY_ID     = os.getenv("KALSHI_KEY_ID", "")
 PAPER_MODE        = os.getenv("PAPER_MODE", "true").lower() == "true"
-PAPER_BALANCE     = float(os.getenv("PAPER_BALANCE", "5000"))
+PAPER_BALANCE     = float(os.getenv("PAPER_BALANCE", "2000"))
 BET_SIZE_USD      = float(os.getenv("BET_SIZE_USD", "12"))
 MAX_BET_USD       = float(os.getenv("MAX_BET_USD", "35"))
-KELLY_FRACTION    = float(os.getenv("KELLY_FRACTION", "0.5"))
+KELLY_FRACTION    = float(os.getenv("KELLY_FRACTION", "0.25"))
 MIN_DIVERGENCE    = float(os.getenv("MIN_DIVERGENCE", "0.10"))  # sentiment vs price must diverge by 10+ pts
 MIN_SENTIMENT_CONF= float(os.getenv("MIN_SENTIMENT_CONF", "0.40"))
 MAKER_FEE         = float(os.getenv("MAKER_FEE", "0.0175"))
